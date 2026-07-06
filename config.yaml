@@ -1,0 +1,59 @@
+# Hybrid RAG configuration.
+# Every value here can be overridden; CLI flags (--db, --model, --mode, --top-k)
+# take precedence over this file.
+
+database:
+  # Path to the SQLite inventory database. Relative paths resolve against the
+  # current working directory.
+  path: "inventory.db"
+
+ollama:
+  host: "http://localhost:11434"
+
+logging:
+  file: "hybrid_rag.log"
+  level: "INFO"
+
+embedding:
+  model: "qwen3-embedding:0.6b"   # verify tag with: ollama list
+  dim: 1024                        # output dimension; update when changing models
+  # Instruction used when the corpus was embedded (document side). Backfill
+  # reuses it so new vectors live in the same embedding space.
+  document_instruction: "Represent this archival document for semantic classification"
+  # Instruction used on the query side at search time.
+  query_instruction: "Given a search query, retrieve archival documents relevant to the query"
+  # Fixed context for the content pass - keep constant or Ollama reloads the
+  # model on every batch (kills throughput); covers the 32000-char cap.
+  num_ctx: 11008
+  max_content_chars: 32000
+
+chat:
+  # Preference order - the first model that is actually installed wins.
+  # Reorder per machine: on a box with more VRAM/RAM, put qwen3.5:27b first;
+  # on the M1 Air 16GB or the 6GB-VRAM PC the 9b quant is the sweet spot.
+  # Models tagged "-cloud" are never selected (they execute remotely).
+  preferred_models:
+    - "qwen3.5:9b-q4_K_M"
+    - "qwen3:8b"
+    - "phi4:14b"
+    - "gemma3:12b"
+    - "qwen2.5:14b"
+    - "llama3.1:8b"
+    - "mistral:7b"
+    - "gemma3:4b"
+    - "llama3.2:3b"
+  num_ctx: 16384
+  temperature: 0.2
+  timeout_seconds: 300
+
+retrieval:
+  top_k: 8                 # documents handed to the LLM
+  semantic_candidates: 30  # candidates from the vector branch before fusion
+  lexical_candidates: 30   # candidates from the SQL branch before fusion
+  rrf_k: 60                # Reciprocal Rank Fusion constant
+  snippet_chars: 1500      # extractedText excerpt per document in the prompt
+
+router:
+  # auto  -> the LLM classifies the query (heuristic fallback)
+  # or force one of: semantic | lexical | hybrid
+  mode: "auto"
